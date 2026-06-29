@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BOSS 岗位筛选</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="header">
+        <div>
+          <h1>BOSS 岗位筛选</h1>
+          <p>规则初筛 + AI 匹配审核。</p>
+        </div>
+        <span class="status" id="status">待筛选</span>
+      </header>
+
+      <section class="form">
+        <details class="ai-box" open>
+          <summary>API 配置</summary>
+          <label>
+            <span>候选人姓名</span>
+            <input id="candidateName" type="text" placeholder="例如：Kathy" />
+          </label>
+          <div class="row">
+            <label>
+              <span>AI 服务商</span>
+              <select id="aiProvider">
+                <option value="openai">OpenAI</option>
+                <option value="deepseek">DeepSeek</option>
+              </select>
+            </label>
+            <label>
+              <span>模型</span>
+              <input id="aiModel" type="text" value="gpt-4o-mini" />
+            </label>
+          </div>
+          <label>
+            <span>API Key</span>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <div class="row">
+            <label class="checkbox">
+              <input id="useAi" type="checkbox" />
+              <span>启用 AI 判断岗位</span>
+            </label>
+            <button id="testAiBtn" type="button" class="secondary">测试连接</button>
+          </div>
+          <p class="hint">API Key 仅保存在本机 Chrome storage。只有勾选“启用 AI 判断岗位”时，抓取后的岗位才会发送给所选模型评分。</p>
+        </details>
+
+        <section class="filter-box">
+          <h2>筛选条件</h2>
+        </section>
+
+        <label>
+          <span>职位名包含</span>
+          <input id="jobKeywords" type="text" placeholder="例如：前端, React, 产品经理" />
+        </label>
+
+        <label>
+          <span>工作地包含</span>
+          <input id="city" type="text" placeholder="例如：上海" />
+        </label>
+
+        <div class="row">
+          <label>
+            <span>工作经验</span>
+            <select id="experience">
+              <option value="">不限</option>
+              <option value="在校生">在校生</option>
+              <option value="应届生">应届生</option>
+              <option value="1年以内">1年以内</option>
+              <option value="1-3年">1-3年</option>
+              <option value="3-5年">3-5年</option>
+              <option value="5-10年">5-10年</option>
+              <option value="10年以上">10年以上</option>
+            </select>
+          </label>
+
+          <label>
+            <span>学历要求</span>
+            <select id="education">
+              <option value="">学历不限</option>
+              <option value="初中及以下">初中及以下</option>
+              <option value="中专">中专</option>
+              <option value="中技">中技</option>
+              <option value="高中">高中</option>
+              <option value="大专">大专</option>
+              <option value="本科">本科</option>
+              <option value="硕士">硕士</option>
+              <option value="博士">博士</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>薪资范围</span>
+            <select id="salaryRange">
+              <option value="">薪资不限</option>
+              <option value="3K以下">3K以下</option>
+              <option value="3-5K">3-5K</option>
+              <option value="5-10K">5-10K</option>
+              <option value="10-20K">10-20K</option>
+              <option value="20-50K">20-50K</option>
+              <option value="50K以上">50K以上</option>
+            </select>
+          </label>
+
+          <label>
+            <span>最低匹配分</span>
+            <input id="minScore" type="number" min="0" max="100" step="5" value="60" />
+          </label>
+        </div>
+
+        <label>
+          <span>抓取岗位数量</span>
+          <input id="collectLimit" type="number" min="1" max="100" step="1" value="30" />
+        </label>
+
+        <label>
+          <span>排除词</span>
+          <input id="blockedKeywords" type="text" placeholder="例如：销售, 外包, 实习" />
+        </label>
+
+        <label>
+          <span>简历内容</span>
+          <textarea id="resumeText" rows="5" placeholder="粘贴简历核心内容：技能、经历、项目、行业背景"></textarea>
+        </label>
+      </section>
+
+      <div class="actions">
+        <button id="scanBtn" type="button">抓取并评分</button>
+      </div>
+
+      <section class="summary" id="summary" hidden>
+        <div>
+          <strong id="totalCount">0</strong>
+          <span>识别岗位</span>
+        </div>
+        <div>
+          <strong id="matchCount">0</strong>
+          <span>推荐查看</span>
+        </div>
+        <div>
+          <strong id="avgScore">0</strong>
+          <span>平均分</span>
+        </div>
+      </section>
+
+      <section class="matches" id="matches" hidden>
+        <header class="section-title">
+          <h2>审核确认</h2>
+          <div class="section-actions">
+            <button id="greetSelectedBtn" type="button" class="link">一键打招呼</button>
+            <button id="copyPromptBtn" type="button" class="link">复制 AI Prompt</button>
+          </div>
+        </header>
+        <div id="matchList" class="match-list"></div>
+      </section>
+
+      <section class="greeting-flow" id="greetingFlow" hidden>
+        <header class="section-title">
+          <h2>打招呼流程</h2>
+          <button id="resetLogBtn" type="button" class="link">重置记录</button>
+        </header>
+        <ol class="flow-list">
+          <li>
+            <strong>7. 生成招呼语</strong>
+            <span>格式：熟悉 XXX、做过 XXX，结合岗位和简历生成。</span>
+          </li>
+          <li>
+            <strong>8. 打开对话</strong>
+            <span>点击匹配岗位 → 查看 JD → 手动点“立即沟通”进入聊天页。</span>
+          </li>
+          <li>
+            <strong>9. 发送</strong>
+            <span>先手动发送简历/作品图片，再复制并发送招呼语。</span>
+          </li>
+          <li>
+            <strong>10. 记录去重</strong>
+            <span>发送后标记成功/跳过/失败；已投岗位不再重复处理。</span>
+          </li>
+          <li>
+            <strong>11. 完成统计</strong>
+            <span>投递 <b id="sentCount">0</b> · 跳过 <b id="skippedCount">0</b> · 失败 <b id="failedCount">0</b></span>
+          </li>
+        </ol>
+        <div class="record-actions">
+          <button id="markSentBtn" type="button">标记成功</button>
+          <button id="markSkippedBtn" type="button" class="secondary">标记跳过</button>
+          <button id="markFailedBtn" type="button" class="secondary">标记失败</button>
+        </div>
+      </section>
+
+      <p class="message" id="message" hidden></p>
+      <p class="hint">先打开 BOSS 岗位列表页。点击岗位卡片可跳到对应 JD 页面；发送给 HR 的动作暂不自动执行。</p>
+    </main>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>

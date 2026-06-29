@@ -1,0 +1,54 @@
+.boss-filter-card {
+  position: relative !important;
+  outline: 2px solid rgba(15, 118, 110, 0.28) !important;
+  outline-offset: 2px !important;
+}
+
+.boss-filter-card[data-boss-filter-level="high"] {
+  outline-color: rgba(15, 118, 110, 0.78) !important;
+}
+
+.boss-filter-card[data-boss-filter-level="medium"] {
+  outline-color: rgba(217, 119, 6, 0.72) !important;
+}
+
+.boss-filter-card[data-boss-filter-level="low"] {
+  outline-color: rgba(148, 163, 184, 0.62) !important;
+  opacity: 0.7;
+}
+
+.boss-filter-badge {
+  position: absolute;
+  z-index: 9999;
+  top: 8px;
+  right: 8px;
+  max-width: min(320px, calc(100% - 16px));
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.boss-filter-badge strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #0f766e;
+  font-size: 14px;
+}
+
+.boss-filter-badge[data-boss-filter-level="medium"] strong {
+  color: #b45309;
+}
+
+.boss-filter-badge[data-boss-filter-level="low"] strong {
+  color: #64748b;
+}
+
+.boss-filter-selected {
+  box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.52) !important;
+}
