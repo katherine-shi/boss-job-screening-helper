@@ -133,6 +133,7 @@
 
       <div class="actions">
         <button id="scanBtn" type="button">抓取并评分</button>
+        <button id="resetResultsBtn" type="button" class="secondary">重置结果</button>
       </div>
 
       <section class="summary" id="summary" hidden>
@@ -163,31 +164,10 @@
 
       <section class="greeting-flow" id="greetingFlow" hidden>
         <header class="section-title">
-          <h2>打招呼流程</h2>
+          <h2>完成统计</h2>
           <button id="resetLogBtn" type="button" class="link">重置记录</button>
         </header>
-        <ol class="flow-list">
-          <li>
-            <strong>7. 生成招呼语</strong>
-            <span>格式：熟悉 XXX、做过 XXX，结合岗位和简历生成。</span>
-          </li>
-          <li>
-            <strong>8. 打开对话</strong>
-            <span>点击匹配岗位 → 查看 JD → 手动点“立即沟通”进入聊天页。</span>
-          </li>
-          <li>
-            <strong>9. 发送</strong>
-            <span>先手动发送简历/作品图片，再复制并发送招呼语。</span>
-          </li>
-          <li>
-            <strong>10. 记录去重</strong>
-            <span>发送后标记成功/跳过/失败；已投岗位不再重复处理。</span>
-          </li>
-          <li>
-            <strong>11. 完成统计</strong>
-            <span>投递 <b id="sentCount">0</b> · 跳过 <b id="skippedCount">0</b> · 失败 <b id="failedCount">0</b></span>
-          </li>
-        </ol>
+        <div class="stats-card">投递 <b id="sentCount">0</b> · 跳过 <b id="skippedCount">0</b> · 失败 <b id="failedCount">0</b></div>
         <div class="record-actions">
           <button id="markSentBtn" type="button">标记成功</button>
           <button id="markSkippedBtn" type="button" class="secondary">标记跳过</button>

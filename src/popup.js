@@ -65,6 +65,18 @@ const defaults = {
   useAi: false
 };
 
+const resultSensitiveFields = [
+  "jobKeywords",
+  "city",
+  "salaryRange",
+  "minScore",
+  "experience",
+  "education",
+  "collectLimit",
+  "blockedKeywords",
+  "resumeText"
+];
+
 const els = Object.fromEntries(formIds.map((id) => [id, document.getElementById(id)]));
 const statusEl = document.getElementById("status");
 const summaryEl = document.getElementById("summary");
@@ -358,10 +370,9 @@ function summarizeJobs(jobs, settings) {
 function renderMatches(jobs, settings) {
   const minScore = Number(settings.minScore || 60);
   const sortedJobs = [...jobs].sort((a, b) => Number(b.finalScore ?? b.score ?? 0) - Number(a.finalScore ?? a.score ?? 0));
-  const matchCount = sortedJobs.filter((job) => Number(job.finalScore ?? job.score ?? 0) >= minScore).length;
 
   matchesEl.hidden = sortedJobs.length === 0;
-  greetingFlowEl.hidden = matchCount === 0;
+  greetingFlowEl.hidden = sortedJobs.length === 0;
   matchListEl.innerHTML = "";
 
   for (const job of sortedJobs) {
@@ -429,6 +440,24 @@ async function persistReviewState() {
       savedAt: new Date().toISOString()
     }
   });
+}
+
+async function resetResults(message = "搜索结果已重置。") {
+  lastJobs = [];
+  lastSummary = null;
+  selectedJobIdSet = new Set();
+  summaryEl.hidden = true;
+  matchesEl.hidden = true;
+  greetingFlowEl.hidden = true;
+  matchListEl.innerHTML = "";
+  await chrome.storage.local.remove(["bossLastReview", "bossGreetingQueue"]);
+  setStatus("待筛选");
+  setMessage(message, "info");
+}
+
+async function clearStaleResultsOnCriteriaChange() {
+  if (!lastJobs.length) return;
+  await resetResults("筛选条件已变化，已清空上一次搜索结果。");
 }
 
 function greetingForJob(job, reasons = []) {
@@ -574,6 +603,14 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
     setMessage();
     setStatus("抓取中");
     await saveSettings();
+    await chrome.storage.local.remove(["bossLastReview", "bossGreetingQueue"]);
+    lastJobs = [];
+    lastSummary = null;
+    selectedJobIdSet = new Set();
+    summaryEl.hidden = true;
+    matchesEl.hidden = true;
+    greetingFlowEl.hidden = true;
+    matchListEl.innerHTML = "";
     const settings = getSettings();
     setMessage("正在抓取当前页面岗位列表...", "info");
     const result = await sendToActiveTab({
@@ -604,6 +641,10 @@ document.getElementById("scanBtn").addEventListener("click", async () => {
     setMessage(error?.message || "筛选失败，请刷新 BOSS 页面后重试。");
     console.error(error);
   }
+});
+
+document.getElementById("resetResultsBtn").addEventListener("click", () => {
+  resetResults();
 });
 
 document.getElementById("copyPromptBtn").addEventListener("click", async () => {
@@ -654,6 +695,10 @@ for (const id of formIds) {
   els[id].addEventListener("change", saveSettings);
 }
 
+for (const id of resultSensitiveFields) {
+  els[id].addEventListener("change", clearStaleResultsOnCriteriaChange);
+}
+
 ["experience", "education", "salaryRange"].forEach((id) => {
   els[id].addEventListener("change", () => applySinglePageFilter(id));
 });
@@ -667,6 +712,7 @@ for (const id of formIds) {
     scheduleSearchSync();
   });
   els[id].addEventListener("input", scheduleSearchSync);
+  els[id].addEventListener("input", clearStaleResultsOnCriteriaChange);
   els[id].addEventListener("change", syncSearchFilters);
   els[id].addEventListener("keydown", (event) => {
     if (event.key === "Enter") {

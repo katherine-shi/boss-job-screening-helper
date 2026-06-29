@@ -100,7 +100,7 @@ select {
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 14px;
 }
@@ -314,28 +314,13 @@ button.link:hover {
   margin-top: 14px;
 }
 
-.flow-list {
-  display: grid;
-  gap: 8px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.flow-list li {
+.stats-card {
   border: 1px solid #dbe3ee;
   border-radius: 8px;
+  margin-top: 8px;
   padding: 9px 10px;
+  color: #334155;
   background: #ffffff;
-}
-
-.flow-list strong,
-.flow-list span {
-  display: block;
-}
-
-.flow-list strong {
-  color: #0f172a;
   font-size: 13px;
 }
 

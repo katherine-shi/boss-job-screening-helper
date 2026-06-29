@@ -320,12 +320,13 @@ async function collectJobs(settings) {
   const jobsById = new Map();
   let staleRounds = 0;
   let loop = 0;
+  const maxLoops = Math.max(60, Math.ceil(limit * 1.8));
+  const maxStaleRounds = 12;
 
-  await scrollToLoadMoreJobs();
-
-  while (jobsById.size < limit && staleRounds < 6 && loop < 50) {
+  while (jobsById.size < limit && staleRounds < maxStaleRounds && loop < maxLoops) {
     loop += 1;
     const before = jobsById.size;
+
     for (const card of candidateCards()) {
       const job = extractJob(card);
       const scored = { ...job, ...scoreJob(job, settings) };
@@ -347,10 +348,11 @@ async function collectJobs(settings) {
 }
 
 async function scrollJobListToBottom() {
-  await scrollToLoadMoreJobs(1);
+  await scrollToLoadMoreJobs(1, { resetToTop: false });
 }
 
-async function scrollToLoadMoreJobs(rounds = 5) {
+async function scrollToLoadMoreJobs(rounds = 5, options = {}) {
+  const { resetToTop = false } = options;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
   const listContainers = [
     document.querySelector(".job-list-box"),
@@ -361,7 +363,7 @@ async function scrollToLoadMoreJobs(rounds = 5) {
 
   for (let index = 0; index < rounds; index += 1) {
     const currentScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-    const targetScroll = currentScroll + viewportHeight * 0.8;
+    const targetScroll = Math.max(currentScroll + viewportHeight * 0.9, document.body.scrollHeight);
 
     window.scrollTo({
       top: targetScroll,
@@ -371,7 +373,7 @@ async function scrollToLoadMoreJobs(rounds = 5) {
     for (const container of listContainers) {
       if (container.scrollHeight > container.clientHeight) {
         container.scrollTo({
-          top: Math.min(container.scrollTop + viewportHeight * 0.8, container.scrollHeight),
+          top: container.scrollHeight,
           behavior: "smooth"
         });
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -381,19 +383,20 @@ async function scrollToLoadMoreJobs(rounds = 5) {
     await wait(1500);
   }
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  if (resetToTop) {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
 
-  for (const container of listContainers) {
-    if (container.scrollHeight > container.clientHeight) {
-      container.scrollTo({ top: 0, behavior: "smooth" });
-      container.dispatchEvent(new Event("scroll", { bubbles: true }));
+    for (const container of listContainers) {
+      if (container.scrollHeight > container.clientHeight) {
+        container.scrollTo({ top: 0, behavior: "smooth" });
+        container.dispatchEvent(new Event("scroll", { bubbles: true }));
+      }
     }
+    await wait(800);
   }
-
-  await wait(800);
 }
 
 function isVisible(el) {
