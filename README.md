@@ -32,23 +32,6 @@
 6. 在“审核确认”中查看匹配岗位，勾选想继续沟通的岗位。
 7. 点击岗位可打开对应 JD；点击“一键打招呼”可生成本地打招呼队列并批量打开 JD。
 
-## AI Prompt 输入格式
-
-AI 判断使用以下结构化输入：
-
-```xml
-<resume>候选人简历全文</resume>
-<preferences>城市/薪资/经验年限/排除词等偏好</preferences>
-<job_description>岗位 JD 全文</job_description>
-```
-
-AI 输出应为 JSON，包含：
-
-- `score`：0-100 分
-- `decision`：`strong_match`、`possible_match` 或 `weak_match`
-- `reasons`：通过原因，必须引用简历或 JD 中的具体信息
-- `risks`：风险或不匹配点，必须引用具体信息
-- `suggested_greeting`：符合“我叫 XXX，熟悉 XXX，做过 XXX，和这个岗位需求的能力相匹配，期望进一步沟通”结构的招呼语
 
 ## 隐私与安全
 
