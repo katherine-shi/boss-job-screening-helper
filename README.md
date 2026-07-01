@@ -73,4 +73,6 @@ python3 -m json.tool manifest.json
 
 ## License
 
-Personal use / internal prototype. 如需开源发布，建议后续补充明确的 LICENSE 文件。
+This project is licensed for personal and other non-commercial use only.
+Commercial use is not permitted without prior written permission. See
+[`LICENSE`](./LICENSE) for details.
