@@ -40,7 +40,9 @@ const formIds = [
   "education",
   "collectLimit",
   "blockedKeywords",
+  "blockedCompanies",
   "resumeText",
+  "greetingMode",
   "candidateName",
   "aiProvider",
   "apiKey",
@@ -57,7 +59,9 @@ const defaults = {
   education: "",
   collectLimit: "30",
   blockedKeywords: "",
+  blockedCompanies: "",
   resumeText: "",
+  greetingMode: "stay",
   candidateName: "",
   aiProvider: "openai",
   apiKey: "",
@@ -74,6 +78,7 @@ const resultSensitiveFields = [
   "education",
   "collectLimit",
   "blockedKeywords",
+  "blockedCompanies",
   "resumeText"
 ];
 
@@ -113,6 +118,20 @@ function salaryRangeToMin(value) {
     "50K以上": 50
   };
   return map[value] || "";
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(/[,，、\n\s]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isBlockedCompany(job, settings = getSettings()) {
+  const blockedCompanies = splitList(settings.blockedCompanies);
+  if (!blockedCompanies.length) return false;
+  const companyText = `${job.company || ""} ${job.text || ""}`.toLowerCase();
+  return blockedCompanies.some((company) => companyText.includes(company));
 }
 
 function setStatus(text) {
@@ -179,6 +198,46 @@ async function injectContentScript(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ["src/content.js"]
+  });
+}
+
+async function sendToTab(tabId, message) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, message);
+  } catch (error) {
+    const text = String(error?.message || "");
+    if (!text.includes("Receiving end does not exist") && !text.includes("Could not establish connection")) {
+      throw error;
+    }
+    await injectContentScript(tabId);
+    await wait(500);
+    return chrome.tabs.sendMessage(tabId, message);
+  }
+}
+
+function waitForTabComplete(tabId, timeout = 12000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const cleanup = () => {
+      chrome.tabs.onUpdated.removeListener(listener);
+    };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve();
+    };
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        finish();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
+      if (tab?.status === "complete") finish();
+    });
+    setTimeout(finish, timeout);
   });
 }
 
@@ -257,7 +316,8 @@ function buildAiMessages(settings, job) {
     `薪资范围：${settings.salaryRange || "不限"}`,
     `经验年限：${settings.experience || "不限"}`,
     `学历要求：${settings.education || "不限"}`,
-    `排除词：${settings.blockedKeywords || "无"}`
+    `排除词：${settings.blockedKeywords || "无"}`,
+    `不投递公司：${settings.blockedCompanies || "无"}`
   ].join("\n");
   const jobDescription = [
     `岗位名称：${job.title || "未知"}`,
@@ -510,6 +570,7 @@ async function openJob(job) {
 
 async function greetSelectedJobs() {
   updateSelectedFromDom();
+  const settings = getSettings();
   const selectedJobs = lastJobs.filter((job) => selectedJobIdSet.has(job.id));
   if (!selectedJobs.length) {
     setMessage("请先勾选要打招呼的岗位。", "info");
@@ -532,16 +593,106 @@ async function greetSelectedJobs() {
   await chrome.storage.local.set({ bossGreetingQueue: tasks });
   await persistReviewState();
 
-  let opened = 0;
+  let success = 0;
+  let failed = 0;
+  let skipped = 0;
+  const runnableTasks = [];
   for (const task of tasks) {
-    if (!task.link) continue;
-    await chrome.tabs.create({ url: task.link, active: false });
-    opened += 1;
+    const sourceJob = selectedJobs.find((job) => job.id === task.id);
+    if (applicationLog[task.id]?.status === "成功") {
+      skipped += 1;
+      task.status = "跳过";
+      task.message = "已成功投递过，不重复投递";
+      await chrome.storage.local.set({ bossGreetingQueue: tasks, bossApplicationLog: applicationLog });
+      continue;
+    }
+
+    if (sourceJob && isBlockedCompany(sourceJob, settings)) {
+      skipped += 1;
+      task.status = "跳过";
+      task.message = "命中不投递公司";
+      applicationLog[task.id] = {
+        status: "跳过",
+        updatedAt: new Date().toISOString(),
+        reason: task.message
+      };
+      await chrome.storage.local.set({ bossGreetingQueue: tasks, bossApplicationLog: applicationLog });
+      renderLogStats();
+      continue;
+    }
+
+    if (!task.link) {
+      failed += 1;
+      applicationLog[task.id] = { status: "失败", updatedAt: new Date().toISOString(), reason: "缺少岗位链接" };
+      await chrome.storage.local.set({ bossGreetingQueue: tasks, bossApplicationLog: applicationLog });
+      renderLogStats();
+      continue;
+    }
+
+    runnableTasks.push(task);
+  }
+
+  if (runnableTasks.length > 0) {
+    setStatus(`打招呼 1/${runnableTasks.length}`);
+    try {
+      const tab = await getActiveTab();
+      if (!tab?.id || !tab.url?.includes("zhipin.com")) {
+        throw new Error("请先停留在 BOSS 岗位列表页。");
+      }
+
+      const result = await chrome.runtime.sendMessage({
+        type: "BOSS_FILTER_RUN_GREETING_QUEUE",
+        sourceTabId: tab.id,
+        tasks: runnableTasks,
+        mode: settings.greetingMode || "stay"
+      });
+
+      const resultsById = new Map((result?.results || []).map((item) => [item.id, item]));
+      const stored = await chrome.storage.local.get(["bossApplicationLog"]);
+      applicationLog = stored.bossApplicationLog || applicationLog;
+      for (const task of runnableTasks) {
+        const item = resultsById.get(task.id);
+        if (item?.ok) {
+          success += 1;
+          task.status = "成功";
+          task.message = item.message || "已开始沟通";
+          applicationLog[task.id] = {
+            status: "成功",
+            updatedAt: new Date().toISOString(),
+            reason: task.message
+          };
+        } else {
+          failed += 1;
+          task.status = "失败";
+          task.message = item?.message || result?.message || "未能开始沟通";
+          applicationLog[task.id] = {
+            status: "失败",
+            updatedAt: new Date().toISOString(),
+            reason: task.message
+          };
+        }
+      }
+    } catch (error) {
+      for (const task of runnableTasks) {
+        failed += 1;
+        task.status = "失败";
+        task.message = error?.message || "未能开始沟通";
+        applicationLog[task.id] = {
+          status: "失败",
+          updatedAt: new Date().toISOString(),
+          reason: task.message
+        };
+      }
+    }
+    await chrome.storage.local.set({ bossGreetingQueue: tasks, bossApplicationLog: applicationLog });
+    renderLogStats();
   }
 
   greetingFlowEl.hidden = false;
-  setStatus("已建队列");
-  setMessage(`已生成 ${tasks.length} 个打招呼任务，并在后台打开 ${opened} 个 JD 标签页。`, "info");
+  await persistReviewState();
+  renderMatches(lastJobs, getSettings());
+  setStatus("已完成");
+  setMessage(`一键打招呼完成：成功 ${success} 个，跳过 ${skipped} 个，失败 ${failed} 个。`, "info");
 }
 
 function escapeHtml(value) {

@@ -202,6 +202,22 @@ button.secondary:hover {
   align-items: center;
 }
 
+.inline-select {
+  display: flex;
+  grid-template-columns: none;
+  gap: 5px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.inline-select select {
+  width: auto;
+  min-width: 104px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 h2 {
   margin: 0;
   color: #1f2937;

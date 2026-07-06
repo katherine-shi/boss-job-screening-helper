@@ -155,9 +155,21 @@ function extractJob(card) {
   return job;
 }
 
+function jobMatchesHardFilters(job, settings) {
+  const titleTerms = splitTerms(settings.jobKeywords);
+  if (titleTerms.length > 0) {
+    const titleText = String(job.title || "").toLowerCase();
+    if (!titleTerms.some((term) => titleText.includes(term))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function scoreJob(job, settings) {
   const titleTerms = splitTerms(settings.jobKeywords);
   const blockedTerms = splitTerms(settings.blockedKeywords);
+  const blockedCompanies = splitTerms(settings.blockedCompanies);
   const resumeTerms = splitTerms(settings.resumeText);
   const city = String(settings.city || "").trim().toLowerCase();
   const minSalary = Number(settings.minSalary || 0);
@@ -240,6 +252,13 @@ function scoreJob(job, settings) {
   if (blockedHits.length > 0) {
     score -= 35;
     risks.push(`包含排除词：${blockedHits.slice(0, 3).join("、")}`);
+  }
+
+  const companyText = `${job.company || ""} ${job.text || ""}`.toLowerCase();
+  const blockedCompanyHits = blockedCompanies.filter((term) => companyText.includes(term));
+  if (blockedCompanyHits.length > 0) {
+    score -= 60;
+    risks.push(`命中不投递公司：${blockedCompanyHits.slice(0, 3).join("、")}`);
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
@@ -329,6 +348,9 @@ async function collectJobs(settings) {
 
     for (const card of candidateCards()) {
       const job = extractJob(card);
+      if (!jobMatchesHardFilters(job, settings)) {
+        continue;
+      }
       const scored = { ...job, ...scoreJob(job, settings) };
       if (!jobsById.has(scored.id)) {
         jobsById.set(scored.id, scored);
@@ -750,6 +772,186 @@ function openJob(jobId) {
   return { ok: true };
 }
 
+function findCardForTask(task) {
+  if (task?.id && lastCardById.has(task.id)) {
+    return lastCardById.get(task.id);
+  }
+
+  for (const card of candidateCards()) {
+    const job = extractJob(card);
+    if (task?.id && job.id === task.id) return card;
+    if (task?.link && job.link && job.link === task.link) return card;
+    if (
+      task?.title
+      && job.title === task.title
+      && (!task.company || !job.company || job.company === task.company)
+    ) {
+      return card;
+    }
+  }
+
+  return null;
+}
+
+function waitForChatElement(selectors, texts, timeout = 5000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      for (const selector of selectors) {
+        const el = document.querySelector(selector);
+        const text = compactText(el?.textContent);
+        const textMatches = texts.length === 0 || texts.includes(text) || texts.some((target) => text.includes(target));
+        if (el && textMatches && isClickableCandidate(el)) {
+          clearInterval(timer);
+          resolve(el);
+          return;
+        }
+      }
+
+      const candidates = document.querySelectorAll("a, button, span, div");
+      for (const el of candidates) {
+        const text = compactText(el.textContent);
+        if ((texts.includes(text) || texts.some((target) => text.includes(target))) && isClickableCandidate(el)) {
+          clearInterval(timer);
+          resolve(el);
+          return;
+        }
+      }
+
+      if (Date.now() - start > timeout) {
+        clearInterval(timer);
+        resolve(null);
+      }
+    }, 200);
+  });
+}
+
+async function handleGreetingStayModal() {
+  await wait(1800);
+  const stayTexts = ["留在此页", "留在当前页", "继续浏览", "稍后再说"];
+  const selectors = [
+    ".default-btn.cancel-btn",
+    ".cancel-btn",
+    "button",
+    "a",
+    "span",
+    "div"
+  ];
+
+  const stayBtn = await waitForChatElement(selectors, stayTexts, 4500);
+  if (stayBtn) {
+    stayBtn.click();
+    await wait(1000);
+    return { stayed: true, message: "已点击留在此页" };
+  }
+
+  return { stayed: false, message: "未出现留在此页弹窗" };
+}
+
+async function handleGreetingChatModal() {
+  await wait(1800);
+  const chatTexts = ["去对话", "继续沟通", "进入对话", "查看沟通", "立即查看"];
+  const selectors = [
+    ".default-btn",
+    ".confirm-btn",
+    ".primary-btn",
+    "button",
+    "a",
+    "span",
+    "div"
+  ];
+
+  const chatBtn = await waitForChatElement(selectors, chatTexts, 4500);
+  if (chatBtn) {
+    chatBtn.click();
+    await wait(1200);
+    return { opened: true, message: "已进入对话页" };
+  }
+
+  return { opened: false, message: "未出现去对话弹窗" };
+}
+
+async function startChatWithBoss(options = {}) {
+  const mode = options.mode || "stay";
+  const chatBtn = await waitForChatElement(
+    [
+      "a.op-btn-chat",
+      ".op-btn-chat",
+      "[ka*='沟通']",
+      "[class*='chat'][class*='btn']",
+      "a[href*='chat']"
+    ],
+    ["立即沟通", "继续沟通"],
+    7000
+  );
+
+  if (!chatBtn) {
+    return { ok: false, status: "失败", message: "未找到立即沟通按钮" };
+  }
+
+  const buttonText = compactText(chatBtn.textContent);
+  if (buttonText === "继续沟通") {
+    if (mode === "chat") {
+      chatBtn.scrollIntoView({ block: "center", behavior: "smooth" });
+      chatBtn.click();
+      await wait(1200);
+      return { ok: true, status: "成功", message: "已打开已有对话页", navigated: true };
+    }
+    return { ok: true, status: "成功", message: "已沟通过，未重复跳转对话页", navigated: false };
+  }
+
+  chatBtn.scrollIntoView({ block: "center", behavior: "smooth" });
+  chatBtn.click();
+
+  if (mode === "chat") {
+    const chatResult = await handleGreetingChatModal();
+    return {
+      ok: true,
+      status: "成功",
+      message: chatResult.opened ? "已点击立即沟通并进入对话页" : "已点击立即沟通",
+      navigated: chatResult.opened
+    };
+  }
+
+  const stayResult = await handleGreetingStayModal();
+  return {
+    ok: true,
+    status: "成功",
+    message: stayResult.stayed ? "已点击立即沟通并留在当前列表页" : "已点击立即沟通",
+    navigated: false
+  };
+}
+
+async function greetTaskFromList(task, options = {}) {
+  let card = findCardForTask(task);
+
+  for (let attempt = 0; !card && attempt < 8; attempt += 1) {
+    await scrollJobListToBottom();
+    card = findCardForTask(task);
+  }
+
+  if (!card) {
+    return { ok: false, status: "失败", message: "未在当前列表页找到对应岗位卡片" };
+  }
+
+  card.classList.add(SELECTED_CLASS);
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.click();
+  await wait(1800);
+
+  return startChatWithBoss(options);
+}
+
+async function greetSelectedTasks(tasks = [], options = {}) {
+  const results = [];
+  for (const task of tasks) {
+    const result = await greetTaskFromList(task, options);
+    results.push({ ...result, id: task.id });
+    await wait(1500);
+  }
+  return { ok: true, results };
+}
+
 function summarize(jobs, settings) {
   const minScore = Number(settings.minScore || 60);
   const scores = jobs.map((job) => Number(job.finalScore ?? job.score ?? 0));
@@ -792,6 +994,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "BOSS_FILTER_OPEN_JOB") {
     sendResponse(openJob(message.jobId));
+    return true;
+  }
+
+  if (message?.type === "BOSS_FILTER_START_CHAT") {
+    startChatWithBoss(message.options || {})
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: "失败", message: error?.message || "打招呼失败" }));
+    return true;
+  }
+
+  if (message?.type === "BOSS_FILTER_GREET_SELECTED") {
+    greetSelectedTasks(message.tasks || [], message.options || {})
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, message: error?.message || "一键打招呼失败", results: [] }));
     return true;
   }
 

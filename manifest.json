@@ -3,7 +3,7 @@
   "name": "BOSS 岗位智能筛选助手",
   "description": "在 BOSS 直聘岗位列表页根据岗位、城市、薪资和简历关键词做本地筛选与标记。",
   "version": "0.1.0",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "tabs"],
   "host_permissions": [
     "https://www.zhipin.com/*",
     "https://*.zhipin.com/*",
@@ -13,6 +13,9 @@
   "action": {
     "default_title": "BOSS 岗位筛选",
     "default_popup": "src/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js"
   },
   "content_scripts": [
     {

@@ -126,6 +126,11 @@
         </label>
 
         <label>
+          <span>不投递公司</span>
+          <input id="blockedCompanies" type="text" placeholder="例如：某某外包, 某某咨询, 已投过的公司" />
+        </label>
+
+        <label>
           <span>简历内容</span>
           <textarea id="resumeText" rows="5" placeholder="粘贴简历核心内容：技能、经历、项目、行业背景"></textarea>
         </label>
@@ -155,6 +160,13 @@
         <header class="section-title">
           <h2>审核确认</h2>
           <div class="section-actions">
+            <label class="inline-select">
+              <span>弹窗选择</span>
+              <select id="greetingMode">
+                <option value="stay">留在此页</option>
+                <option value="chat">去对话新标签</option>
+              </select>
+            </label>
             <button id="greetSelectedBtn" type="button" class="link">一键打招呼</button>
             <button id="copyPromptBtn" type="button" class="link">复制 AI Prompt</button>
           </div>
